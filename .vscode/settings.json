@@ -1,0 +1,20 @@
+{
+    "files.associations": {
+        "stdlib.h": "c",
+        "buffered_printf.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "format": "c",
+        "initializer_list": "c",
+        "span": "c",
+        "cstdlib": "c",
+        "unity.h": "c",
+        "slice.h": "c",
+        "charconv": "c",
+        "random": "c",
+        "unistd.h": "c",
+        "cstdint": "c",
+        "stdio.h": "c",
+        "any": "c"
+    }
+}

@@ -1,0 +1,6 @@
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/unity.dir
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/slice.dir
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/slice_test.dir
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/test.dir
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/edit_cache.dir
+/media/bagaswh/gammix-large/code/mine/c-toolbox/build/CMakeFiles/rebuild_cache.dir
