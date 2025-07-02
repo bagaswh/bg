@@ -5,11 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "mem.h"
-
 #define MIN(a, b) (a < b ? a : b)
 #define SLICE_GET_SIZE_IN_BYTES(sl, size) (sl == NULL ? -1 : size * sl->elem_size)
 #define SLICE_GET_CAP_IN_BYTES(sl) SLICE_GET_SIZE_IN_BYTES(sl, sl->cap)
+#define SLICE_GET_LEN_IN_BYTES(sl) SLICE_GET_SIZE_IN_BYTES(sl, sl->len)
 
 typedef struct Slice_s {
 	size_t cap;
@@ -48,7 +47,7 @@ Slice_s *slice_new_from_slice(Slice_s *src, size_t start, size_t len) {
 	}
 	memcpy(s, src, sizeof(Slice_s));
 	s->len = len;
-	s->data = s->data + start;
+	s->data = s->data + SLICE_GET_SIZE_IN_BYTES(s, start);
 	return s;
 }
 
@@ -89,26 +88,26 @@ ssize_t slice_get_len(Slice_s *s) {
 	return s->len;
 }
 
-void *slice_set_len(Slice_s *s, size_t len) {
+void slice_set_len(Slice_s *s, size_t len) {
 	if (s == NULL) {
-		return NULL;
+		return;
 	}
 	if (len > s->cap || len < 0) {
-		return NULL;
+		return;
 	}
 	s->len = len;
-	return s->data;
+	return;
 }
 
-void *slice_incr_len(Slice_s *s, size_t incr) {
+void slice_incr_len(Slice_s *s, size_t incr) {
 	if (s == NULL) {
-		return NULL;
+		return;
 	}
 	if ((s->len + incr) > s->cap || (s->len + incr) < 0) {
-		return NULL;
+		return;
 	}
 	s->len += incr;
-	return s->data;
+	return;
 }
 
 ssize_t slice_get_total_cap(Slice_s *s) {
@@ -142,9 +141,13 @@ Slice_s *slice_grow(Slice_s *s) {
 	} else {
 		s->cap *= 1.25;
 	}
+	void *prev_data = s->data;
 	s->data = realloc(s->data, SLICE_GET_CAP_IN_BYTES(s));
 	if (s->data == NULL) {
 		return NULL;
+	}
+	if (prev_data != s->data) {
+		memcpy(s->data, prev_data, SLICE_GET_LEN_IN_BYTES(s));
 	}
 	return s;
 }
@@ -153,7 +156,7 @@ void *slice_get_ptr_offset(Slice_s *s) {
 	if (s == NULL) {
 		return NULL;
 	}
-	return s->data + s->len;
+	return s->data + SLICE_GET_LEN_IN_BYTES(s);
 }
 
 Slice_s *slice_grow_to_cap(Slice_s *s, size_t cap) {
@@ -161,6 +164,7 @@ Slice_s *slice_grow_to_cap(Slice_s *s, size_t cap) {
 		return s;
 	}
 	s->data = realloc(s->data, SLICE_GET_SIZE_IN_BYTES(s, cap));
+	s->cap = cap;
 	if (s->data == NULL) {
 		return NULL;
 	}
@@ -174,7 +178,7 @@ Slice_s *slice_append(Slice_s *s, void *const item) {
 			return NULL;
 		}
 	}
-	char *ptr = s->data + s->len;
+	char *ptr = s->data + SLICE_GET_SIZE_IN_BYTES(s, s->len);
 	memcpy(ptr, item, s->elem_size);
 	s->len++;
 	return s;
@@ -201,4 +205,22 @@ ssize_t slice_copy(Slice_s *dst, Slice_s *src) {
 	size_t len_to_copy = MIN(dst->len, src->len);
 	memcpy(dst->data, src->data, SLICE_GET_SIZE_IN_BYTES(dst, len_to_copy));
 	return len_to_copy;
+}
+
+void *slice_get(Slice_s *s, size_t index) {
+	if (s == NULL || index > s->len) return NULL;
+	return &(((char *)s->data)[SLICE_GET_SIZE_IN_BYTES(s, index)]);
+}
+
+void slice_range(Slice *s, bool (*callback)(void *, size_t idx, size_t len, size_t cap)) {
+	if (s == NULL || callback == NULL) {
+		return;
+	}
+	size_t idx = 0;
+	for (size_t i = 0; i < s->len; i += s->elem_size) {
+		if (!callback(&(((char *)s->data)[i]), idx, i, s->len)) {
+			break;
+		}
+		idx++;
+	}
 }

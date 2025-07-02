@@ -15,6 +15,7 @@
         "unistd.h": "c",
         "cstdint": "c",
         "stdio.h": "c",
-        "any": "c"
+        "any": "c",
+        "stdbool.h": "c"
     }
 }

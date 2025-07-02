@@ -1,1 +1,0 @@
-/usr/bin/cc -Wl,--dependency-file=CMakeFiles/slice_test.dir/link.d CMakeFiles/slice_test.dir/slice_test.c.o -o slice_test  libslice.a libunity.a
