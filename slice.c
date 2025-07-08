@@ -164,6 +164,13 @@ void *slice_get_ptr_offset(Slice_s *s) {
 	return s->data + slice_get_len_in_bytes(s);
 }
 
+void *slice_get_ptr_begin_offset(Slice_s *s) {
+	if (s == NULL) {
+		return NULL;
+	}
+	return s->data;
+}
+
 Slice_s *slice_grow_to_cap(Slice_s *s, size_t cap) {
 	if (cap < s->cap) {
 		return s;
