@@ -16,6 +16,14 @@
         "cstdint": "c",
         "stdio.h": "c",
         "any": "c",
-        "stdbool.h": "c"
+        "stdbool.h": "c",
+        "bit": "c",
+        "chrono": "c",
+        "functional": "c",
+        "istream": "c",
+        "limits": "c",
+        "numeric": "c",
+        "semaphore": "c",
+        "algorithm": "c"
     }
 }

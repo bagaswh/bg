@@ -20,6 +20,7 @@ void slice_free(Slice *s);
 Slice *slice_grow(Slice *s);
 Slice *slice_grow_to_cap(Slice *s, size_t cap);
 void *slice_get_ptr_offset(Slice *s);
+Slice *slice_append_n(Slice *s, void *const item, size_t n);
 Slice *slice_append(Slice *s, void *const item);
 bool slice_is_full(Slice *s);
 ssize_t slice_copy(Slice *dst, Slice *src);

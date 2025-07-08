@@ -18,5 +18,15 @@ target_include_directories(slice PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(slice_test slice_test.c)
 target_link_libraries(slice_test PRIVATE slice unity)
 
+# Add AddressSanitizer for tests
+# if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "")
+#     target_compile_options(slice_test PRIVATE -fsanitize=address -fno-omit-frame-pointer -g -O1)
+#     target_link_options(slice_test PRIVATE -fsanitize=address)
+    
+#     # Also apply ASan to the slice library to ensure consistent instrumentation
+#     target_compile_options(slice PRIVATE -fsanitize=address -fno-omit-frame-pointer -g -O1)
+#     target_link_options(slice PRIVATE -fsanitize=address)
+# endif()
+
 enable_testing()
 add_test(NAME SliceTest COMMAND slice_test)
