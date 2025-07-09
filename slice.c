@@ -243,12 +243,10 @@ void slice_range(Slice *s, void *ctx, bool (*callback)(void *, size_t idx, size_
 	if (s == NULL || callback == NULL) {
 		return;
 	}
-	size_t idx = 0;
 	for (size_t i = 0; i < s->len; i++) {
 		char *ptr = s->data + slice_get_size_in_bytes(s, i);
-		if (!callback(ptr, idx, i, s->len, ctx)) {
+		if (!callback(ptr, i, s->len, s->cap, ctx)) {
 			break;
 		}
-		idx++;
 	}
 }
