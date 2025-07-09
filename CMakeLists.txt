@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
-project(c_toolbox C)
 
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_C_STANDARD_REQUIRED ON)
+# Force use of Clang
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_CXX_COMPILER clang++)
+
+project(c_toolbox C)
 
 # Add Unity
 add_library(unity

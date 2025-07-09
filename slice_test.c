@@ -17,19 +17,6 @@ typedef struct Slice_s {
 	void *data;
 } Slice_s;
 
-// Helper function for range testing
-bool sum_callback(void *item, size_t idx, size_t len, size_t cap) {
-	int *val = (int *)item;
-	static int sum = 0;
-	if (idx == 0) sum = 0;  // Reset for each test
-	sum += *val;
-	return true;  // Continue iteration
-}
-
-bool early_exit_callback(void *item, size_t idx, size_t len, size_t cap) {
-	return idx < 2;  // Stop after 2 iterations
-}
-
 // ============================================================================
 // Test slice_new function
 // ============================================================================
@@ -608,17 +595,37 @@ void test_slice_get_empty_slice(void) {
 // Test slice_range function
 // ============================================================================
 
+struct sum_callback_ctx {
+	int sum;
+};
+
+bool sum_callback(void *item, size_t idx, size_t len, size_t cap, void *ctx) {
+	struct sum_callback_ctx *sctx = (struct sum_callback_ctx *)ctx;
+	int *val = (int *)item;
+	if (idx == 0) sctx->sum = 0;
+	sctx->sum += *val;
+	return true;
+}
+
+bool early_exit_callback(void *item, size_t idx, size_t len, size_t cap, void *ctx) {
+	return idx < 2;  // Stop after 2 iterations
+}
+
 void test_slice_range_valid_callback(void) {
 	Slice_s *s = slice_new(5, 3, sizeof(int));
-	int *data = (int *)s->data;
-	data[0] = 10;
-	data[1] = 20;
-	data[2] = 30;
+	slice_append(s, &(int){10});
+	slice_append(s, &(int){20});
+	slice_append(s, &(int){30});
+
+	struct sum_callback_ctx sum = {.sum = 0};
+	int expected_sum = 10 + 20 + 30;
 
 	// Note: This test assumes the callback function works as expected
 	// The actual behavior depends on the callback implementation
-	slice_range(s, sum_callback);
+	slice_range(s, &sum, sum_callback);
 	// We can't easily verify the sum without global state or more complex setup
+
+	TEST_ASSERT_EQUAL_INT(expected_sum, sum.sum);
 
 	slice_free(s);
 }
@@ -630,7 +637,7 @@ void test_slice_range_early_exit(void) {
 		data[i] = i * 10;
 	}
 
-	slice_range(s, early_exit_callback);
+	slice_range(s, NULL, early_exit_callback);
 	// The callback should stop after 2 iterations
 	// Verification would require more complex setup
 
@@ -638,18 +645,18 @@ void test_slice_range_early_exit(void) {
 }
 
 void test_slice_range_null_slice(void) {
-	slice_range(NULL, sum_callback);  // Should not crash
+	slice_range(NULL, NULL, sum_callback);  // Should not crash
 }
 
 void test_slice_range_null_callback(void) {
 	Slice_s *s = slice_new(5, 3, sizeof(int));
-	slice_range(s, NULL);  // Should not crash
+	slice_range(s, NULL, NULL);  // Should not crash
 	slice_free(s);
 }
 
 void test_slice_range_empty_slice(void) {
 	Slice_s *s = slice_new(10, 0, sizeof(int));
-	slice_range(s, sum_callback);  // Should not crash, no iterations
+	slice_range(s, NULL, sum_callback);  // Should not crash, no iterations
 	slice_free(s);
 }
 

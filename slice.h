@@ -25,7 +25,7 @@ Slice *slice_append_n(Slice *s, void *const item, size_t n);
 Slice *slice_append(Slice *s, void *const item);
 bool slice_is_full(Slice *s);
 ssize_t slice_copy(Slice *dst, Slice *src);
-void slice_range(Slice *s, bool (*callback)(void *, size_t idx, size_t len, size_t cap));
+void slice_range(Slice *s, void *ctx, bool (*callback)(void *, size_t idx, size_t len, size_t cap, void *ctx));
 void *slice_get(Slice *s, size_t index);
 
 #endif  // SLICE_H
