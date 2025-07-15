@@ -1,5 +1,7 @@
 {
     "files.associations": {
+        "*.embeddedhtml": "html",
+        "*.service": "ini",
         "stdlib.h": "c",
         "buffered_printf.h": "c",
         "array": "c",
@@ -25,6 +27,7 @@
         "numeric": "c",
         "semaphore": "c",
         "algorithm": "c",
-        "variant": "c"
+        "variant": "c",
+        "time.h": "c"
     }
 }
