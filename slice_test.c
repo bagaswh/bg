@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "types.h"
 #include "unity.h"
 
 void setUp(void) {}
@@ -599,7 +600,7 @@ struct sum_callback_ctx {
 	int sum;
 };
 
-bool sum_callback(void *item, size_t idx, size_t len, size_t cap, void *ctx) {
+bool sum_callback(void *item, size_t idx, void *ctx) {
 	struct sum_callback_ctx *sctx = (struct sum_callback_ctx *)ctx;
 	int *val = (int *)item;
 	if (idx == 0) sctx->sum = 0;
@@ -607,7 +608,7 @@ bool sum_callback(void *item, size_t idx, size_t len, size_t cap, void *ctx) {
 	return true;
 }
 
-bool early_exit_callback(void *item, size_t idx, size_t len, size_t cap, void *ctx) {
+bool early_exit_callback(void *item, size_t idx, void *ctx) {
 	return idx < 2;  // Stop after 2 iterations
 }
 
@@ -657,6 +658,48 @@ void test_slice_range_null_callback(void) {
 void test_slice_range_empty_slice(void) {
 	Slice_s *s = slice_new(10, 0, sizeof(int));
 	slice_range(s, NULL, sum_callback);  // Should not crash, no iterations
+	slice_free(s);
+}
+
+// ============================================================================
+// Test slice_sort_bubble function
+// ============================================================================
+
+typedef u8 *comparable;
+typedef comparable (*slice_sort_get_key_fn)(void *item, size_t idx);
+typedef ssize_t (*slice_sort_comparator)(comparable a, comparable b, void *ctx);
+extern size_t slice_sort_bubble(Slice *s, void *ctx, slice_sort_get_key_fn get_key_fn, slice_sort_comparator comparator);
+
+bool print_range_callback(void *item, size_t idx, void *ctx) {
+	printf("%d\t", *(int *)item);
+	return true;
+}
+
+comparable test_slice_sort_bubble_get_key_fn(void *item, size_t idx) {
+	return (comparable)item;
+}
+
+ssize_t int_comparator_asc(comparable a, comparable b, void *ctx) {
+	return *(int *)a - *(int *)b;
+}
+
+ssize_t int_comparator_desc(comparable a, comparable b, void *ctx) {
+	return *(int *)b - *(int *)a;
+}
+
+void test_slice_sort_bubble(void) {
+	Slice_s *s = slice_new(100, 0, sizeof(int));
+	while (s->len < 100) {
+		slice_append(s, &((int){rand() % 100}));
+	}
+	slice_sort_bubble(s, NULL, NULL, int_comparator_asc);
+	for (size_t i = 0; i < s->len - 1; i++) {
+		TEST_ASSERT_LESS_OR_EQUAL_INT_MESSAGE(*(int *)slice_get(s, i + 1), *(int *)slice_get(s, i), "ASC Sorted incorrectly");
+	}
+	slice_sort_bubble(s, NULL, NULL, int_comparator_desc);
+	for (size_t i = 0; i < s->len - 1; i++) {
+		TEST_ASSERT_LESS_OR_EQUAL_INT_MESSAGE(*(int *)slice_get(s, i), *(int *)slice_get(s, i + 1), "DESC Sorted incorrectly");
+	}
 	slice_free(s);
 }
 
@@ -832,6 +875,8 @@ static const test_case_t all_tests[] = {
     {test_slice_range_null_slice, "test_slice_range_null_slice"},
     {test_slice_range_null_callback, "test_slice_range_null_callback"},
     {test_slice_range_empty_slice, "test_slice_range_empty_slice"},
+
+    {test_slice_sort_bubble, "test_slice_sort_bubble"},
 
     // slice_free tests
     {test_slice_free_valid_slice, "test_slice_free_valid_slice"},

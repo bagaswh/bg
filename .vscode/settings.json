@@ -24,6 +24,7 @@
         "limits": "c",
         "numeric": "c",
         "semaphore": "c",
-        "algorithm": "c"
+        "algorithm": "c",
+        "variant": "c"
     }
 }

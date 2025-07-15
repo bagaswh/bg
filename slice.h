@@ -6,6 +6,8 @@
 
 typedef struct Slice_s Slice;
 
+typedef bool (*slice_range_callback)(void *, size_t idx, void *ctx);
+
 Slice *slice_char_new(size_t cap, size_t len);
 Slice *slice_reset(Slice *s);
 Slice *slice_new(size_t cap, size_t len, size_t elem_size);
@@ -25,7 +27,7 @@ Slice *slice_append_n(Slice *s, void *const item, size_t n);
 Slice *slice_append(Slice *s, void *const item);
 bool slice_is_full(Slice *s);
 ssize_t slice_copy(Slice *dst, Slice *src);
-void slice_range(Slice *s, void *ctx, bool (*callback)(void *, size_t idx, size_t len, size_t cap, void *ctx));
+void slice_range(Slice *s, void *ctx, slice_range_callback callback);
 void *slice_get(Slice *s, size_t index);
 
 #endif  // SLICE_H
