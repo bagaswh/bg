@@ -8,6 +8,10 @@ typedef struct Slice_s Slice;
 
 typedef bool (*slice_range_callback)(void *, size_t idx, void *ctx);
 
+enum slice_status {
+    OK
+};
+
 Slice *slice_char_new(size_t cap, size_t len);
 Slice *slice_reset(Slice *s);
 Slice *slice_new(size_t cap, size_t len, size_t elem_size);

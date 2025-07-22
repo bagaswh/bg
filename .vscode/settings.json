@@ -1,33 +1,5 @@
 {
     "files.associations": {
-        "*.embeddedhtml": "html",
-        "*.service": "ini",
-        "stdlib.h": "c",
-        "buffered_printf.h": "c",
-        "array": "c",
-        "string_view": "c",
-        "format": "c",
-        "initializer_list": "c",
-        "span": "c",
-        "cstdlib": "c",
-        "unity.h": "c",
-        "slice.h": "c",
-        "charconv": "c",
-        "random": "c",
-        "unistd.h": "c",
-        "cstdint": "c",
-        "stdio.h": "c",
-        "any": "c",
-        "stdbool.h": "c",
-        "bit": "c",
-        "chrono": "c",
-        "functional": "c",
-        "istream": "c",
-        "limits": "c",
-        "numeric": "c",
-        "semaphore": "c",
-        "algorithm": "c",
-        "variant": "c",
-        "time.h": "c"
+        "allocator.h": "c"
     }
 }
