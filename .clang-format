@@ -1,7 +1,7 @@
 # copied from https://github.com/NetHack/NetHack/blob/NetHack-3.7/.clang-format
 
 ---
-Language:        C
+Language:        Cpp
 # BasedOnStyle:  LLVM
 AccessModifierOffset: -2
 AlignAfterOpenBracket: true
@@ -64,3 +64,4 @@ ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 SpaceBeforeParens: ControlStatements
 DisableFormat:   false
 ...
+
