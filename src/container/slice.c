@@ -16,35 +16,31 @@
 #define BGSlice_get_cap_in_bytes(sl) BGSlice_get_size_in_bytes(sl, sl->cap)
 #define BGSlice_get_len_in_bytes(sl) BGSlice_get_size_in_bytes(sl, sl->len)
 
-static const bool abort_on_oob =
-#ifndef BGSlice_NO_ABORT_ON_OOB
-    true
-#else
-    false
+#ifndef assert_slice_len_bound_check
+#    ifndef BG_SLICE_NO_ABORT_ON_OOB
+#        define assert_slice_len_bound_check(sl, i)                 \
+            do {                                                    \
+                bg_assert("BGSlice", ((i) < (sl->len) && (i) >= 0), \
+                          "tried perform out-of-bound access at "   \
+                          "index %zu "                              \
+                          "of slice length %zu\n",                  \
+                          (i), sl->len);                            \
+            } while (0)
+
+#        define assert_slice_cap_bound_check(sl, i)                 \
+            do {                                                    \
+                bg_assert("BGSlice", ((i) < (sl->cap) && (i) >= 0), \
+                          "tried perform out-of-bound access at "   \
+                          "index %zu "                              \
+                          "of slice capacity %zu\n",                \
+                          (i), sl->len);                            \
+            } while (0)
+#    else
+#        define assert_slice_len_bound_check(sl, i)
+#        define assert_slice_cap_bound_check(sl, i)
+#    endif
+
 #endif
-    ;
-
-#define assert_slice_len_bound_check(sl, i)                   \
-    do {                                                      \
-        if (bg_unlikely(abort_on_oob)) {                      \
-            bg_assert("BGSlice", ((i) < (sl->len) && i >= 0), \
-                      "tried perform out-of-bound access at " \
-                      "index %zu "                            \
-                      "of slice length %zu\n",                \
-                      (i), sl->len);                          \
-        }                                                     \
-    } while (0)
-
-#define assert_slice_cap_bound_check(sl, i)                   \
-    do {                                                      \
-        if (bg_unlikely(abort_on_oob)) {                      \
-            bg_assert("BGSlice", ((i) < (sl->cap) && i >= 0), \
-                      "tried perform out-of-bound access at " \
-                      "index %zu "                            \
-                      "of slice capacity %zu\n",              \
-                      (i), sl->len);                          \
-        }                                                     \
-    } while (0)
 
 #define assert_slice(condition, fmt, ...)                  \
     do {                                                   \
@@ -168,7 +164,7 @@ __BGSlice_new_copy_from_buf(void *buf, size_t size, size_t len, size_t cap,
     if (s->buf == NULL)
         return NULL;
 
-    memcpy(s->buf, buf, size);
+    memcpy(s->buf, buf, size * s->elem_size);
 
     return (BGSlice *) s;
 }
@@ -322,7 +318,10 @@ void
 BGSlice_set_len(BGSlice_s *s, size_t len)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
-    assert_slice_cap_bound_check(s, len);
+    bg_assert(
+        "BGSlice", ((len) <= (s->cap) && (len) >= 0),
+        "Tried to set slice length to %zu, but the slice capacity is %zu.",
+        (len), s->cap);
 
     if (len == BG_SIZE_AUTO)
         len = s->len;
@@ -334,36 +333,40 @@ BGSlice_set_len(BGSlice_s *s, size_t len)
 void
 BGSlice_incr_len(BGSlice_s *s, size_t incr)
 {
+    if (bg_unlikely(incr == 0))
+        return;
+
     assert_slice(s != NULL, "slice cannot be NULL");
-    assert_slice((s->len + incr) <= s->len,
-                 "potential underflow when incrementing len");
-    assert_slice((s->len + incr) > s->cap,
-                 "cannot increment slice that will exceed its cap");
+    assert_slice(
+        (s->len + incr) >= s->len,
+        "Potential underflow when incrementing length. Length is %zu, "
+        "after incrementing by %zu it's %zu.",
+        s->len, incr, (s->len + incr));
+    assert_slice(
+        (s->len + incr) <= s->cap,
+        "Cannot increment length that will exceed slice capacity. Length is "
+        "%zu, capacity is %zu, after incrementing length by %zu it's %zu.",
+        s->len, s->cap, incr, (s->len + incr));
 
     s->len += incr;
     return;
 }
 
-ssize_t
+size_t
 BGSlice_get_cap(BGSlice_s *s)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
 
-    if (bg_unlikely(s == NULL))
-        return -1;
-
     return s->cap;
 }
 
-ssize_t
+size_t
 BGSlice_get_usable_cap(BGSlice_s *s)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice(s->buf != NULL, "slice buffer cannot be NULL");
 
-    if (bg_unlikely(s == NULL))
-        return -1;
-
-    return s->buf == NULL ? -1 : s->cap - s->len;
+    return s->cap - s->len;
 }
 
 void
@@ -428,7 +431,10 @@ BGSlice_get_data_ptr(BGSlice_s *s)
 BGSlice *
 BGSlice_grow_to_cap(BGSlice_s *s, size_t cap)
 {
-    if (cap < s->cap)
+    assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice(cap > s->cap, "cannot grow slice to smaller capacity");
+
+    if (cap <= s->cap)
         return s;
 
     s->buf = s->allocator->realloc(s->buf, BGSlice_get_size_in_bytes(s, cap));
@@ -487,13 +493,14 @@ BGSlice_is_full(BGSlice_s *s)
 ssize_t
 BGSlice_copy(BGSlice_s *dst, BGSlice_s *src)
 {
-    assert_slice(dst == NULL || src == NULL,
+    assert_slice(dst != NULL || src != NULL,
                  "dst and src NULL cannot be NULL");
-    assert_slice(dst->elem_size != src->elem_size,
+    assert_slice(dst->elem_size == src->elem_size,
                  "cannot copy two slices with different elem_size, dst "
                  "elem_size is %zu while src elem_size is %zu",
                  dst->elem_size, src->elem_size);
-    assert_slice(dst->buf == NULL || src->buf, "slices data cannot be NULL");
+    assert_slice(dst->buf != NULL || src->buf != NULL,
+                 "slices data cannot be NULL");
 
     size_t len_to_copy = min(dst->len, src->len);
     memcpy(dst->buf, src->buf, BGSlice_get_size_in_bytes(dst, len_to_copy));
@@ -503,28 +510,26 @@ BGSlice_copy(BGSlice_s *dst, BGSlice_s *src)
 void *
 BGSlice_get(BGSlice_s *s, size_t index)
 {
-    if (bg_unlikely(s == NULL || index >= s->len)) {
-        assert_slice_len_bound_check(s, index);
-        return NULL;
-    }
+    assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice_len_bound_check(s, index);
+
     return &(((char *) s->buf)[BGSlice_get_size_in_bytes(s, index)]);
 }
 
 void *
 BGSlice_get_last(BGSlice_s *s)
 {
-    if (bg_unlikely(s == NULL || s->len == 0)) {
-        assert_slice_len_bound_check(s, s->len - 1);
-        return NULL;
-    }
+    assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice_len_bound_check(s, s->len - 1);
+
     return &(((char *) s->buf)[BGSlice_get_size_in_bytes(s, s->len - 1)]);
 }
 
 void
 BGSlice_range(BGSlice_s *s, void *ctx, BGSlice_range_callback callback)
 {
-    if (bg_unlikely(s == NULL || callback == NULL))
-        return;
+    assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice(callback != NULL, "callback cannot be NULL");
 
     for (size_t i = 0; i < s->len; i++) {
         char *ptr = ((char *) s->buf) + BGSlice_get_size_in_bytes(s, i);

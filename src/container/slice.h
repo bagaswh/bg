@@ -36,9 +36,9 @@ BGSlice *__BGSlice_new(size_t len, size_t cap, size_t elem_size,
 BGSlice *__BGSlice_new_copy_from_buf(void *ptr, size_t size, size_t len,
                                      size_t cap, size_t elem_size,
                                      struct BGSliceOption *option);
-#define BGSlice_new_copy_from_buf(buf, n, len, cap, option)                 \
-    __BGSlice_new_copy_from_buf((void *) buf, sizeof(buf[0]) * n, len, cap, \
-                                sizeof(buf[0]), option);
+#define BGSlice_new_copy_from_buf(buf, n, len, cap, option)                \
+    __BGSlice_new_copy_from_buf((void *) buf, n, len, cap, sizeof(buf[0]), \
+                                option);
 
 BGSlice *__BGSlice_new_from_buf(void *ptr, size_t len, size_t cap,
                                 size_t elem_size,
@@ -56,8 +56,8 @@ BGSlice *BGSlice_reset(BGSlice *s);
 
 ssize_t BGSlice_get_len(BGSlice *s);
 void BGSlice_set_len(BGSlice *s, size_t len);
-ssize_t BGSlice_get_cap(BGSlice *s);
-ssize_t BGSlice_get_usable_cap(BGSlice *s);
+size_t BGSlice_get_cap(BGSlice *s);
+size_t BGSlice_get_usable_cap(BGSlice *s);
 
 void BGSlice_free(BGSlice *s);
 

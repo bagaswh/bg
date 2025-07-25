@@ -32,6 +32,8 @@
         "ratio": "c",
         "tuple": "c",
         "type_traits": "c",
-        "utility": "c"
-    }
+        "utility": "c",
+        "testutils.h": "c"
+    },
+    "cmake.ignoreCMakeListsMissing": true
 }

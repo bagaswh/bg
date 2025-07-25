@@ -5,7 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Test helper macros
+#include "common.h"
+#include "testutils.h"
+
 #define ASSERT_SLICE_LEN(slice, expected) \
     TEST_ASSERT_EQUAL(expected, BGSlice_get_len(slice))
 #define ASSERT_SLICE_CAP(slice, expected) \
@@ -23,22 +25,6 @@ tearDown(void)
     // Called after each test
 }
 
-#define expect_assertion(stuff_to_do, name)                               \
-    do {                                                                  \
-        volatile int assertions_run = 0;                                  \
-        if (setjmp(test_resume_env) == 0) {                               \
-            stuff_to_do                                                   \
-        } else {                                                          \
-            assertions_run++;                                             \
-        }                                                                 \
-        TEST_ASSERT_EQUAL_INT_MESSAGE(1, assertions_run,                  \
-                                      "Assertion did not run for " name); \
-    } while (0)
-
-// Used to test if assertion works.
-jmp_buf test_resume_env;
-
-// Test BGSlice_new
 void
 test_BGSlice_new(void)
 {
@@ -53,8 +39,9 @@ test_BGSlice_new(void)
 
     // invalid params
     {
-        expect_assertion({ BGSlice_new(int, 5, 0, NULL); }, "len=5; cap=0");
-        expect_assertion(
+        bg_expect_assertion(
+            { BGSlice_new(int, 5, 0, NULL); }, "len=5; cap=0");
+        bg_expect_assertion(
             { __BGSlice_new(5, 10, 0, NULL); },
             "zero elem_size"); // zero elem_size
     }
@@ -95,7 +82,7 @@ test_BGSlice_reset(void)
 
     BGSlice_reset(slice);
     ASSERT_SLICE_LEN(slice, 0);
-    ASSERT_SLICE_CAP(slice, 10); // capacity should remain unchanged
+    ASSERT_SLICE_CAP(slice, 10);
 
     BGSlice_free(slice);
 }
@@ -112,306 +99,296 @@ test_BGSlice_len_operations(void)
     BGSlice_set_len(slice, 7);
     ASSERT_SLICE_LEN(slice, 7);
 
-    expect_assertion(
+    BGSlice_set_len(slice, 10);
+    ASSERT_SLICE_LEN(slice, 10);
+    TEST_ASSERT_EQUAL_MESSAGE(true, BGSlice_is_full(slice),
+                              "slice is not full after setting len to 10");
+
+    bg_expect_assertion(
         { BGSlice_set_len(slice, 20); }, "setting larger len than cap");
 
     BGSlice_free(slice);
 }
 
-// // Test BGSlice_incr_len
-// void
-// test_BGSlice_incr_len(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(10, 3, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+typedef struct BGSlice_s BGSlice_s;
+extern void BGSlice_incr_len(BGSlice_s *s, size_t incr);
 
-//     BGSlice_incr_len(slice, 2);
-//     ASSERT_SLICE_LEN(slice, 5);
+// Test BGSlice_incr_len
+void
+test_BGSlice_incr_len(void)
+{
+    BGSlice *slice = BGSlice_new(int, 3, 10, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
 
-//     BGSlice_incr_len(slice, 5);
-//     ASSERT_SLICE_LEN(slice, 10);
+    BGSlice_incr_len(slice, 2);
+    ASSERT_SLICE_LEN(slice, 5);
 
-//     BGSlice_free(slice);
-// }
+    BGSlice_incr_len(slice, 5);
+    ASSERT_SLICE_LEN(slice, 10);
 
-// // Test BGSlice_get_usable_cap
-// void
-// test_BGSlice_get_usable_cap(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(10, 3, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+    bg_expect_assertion(
+        { BGSlice_incr_len(slice, 5); }, "increment past capacity");
 
-//     TEST_ASSERT_EQUAL(7, BGSlice_get_usable_cap(slice));
+    BGSlice_free(slice);
+}
 
-//     BGSlice_set_len(slice, 8);
-//     TEST_ASSERT_EQUAL(2, BGSlice_get_usable_cap(slice));
+// Test BGSlice get capacity functionalities
+void
+test_BGSlice_get_cap_funcs(void)
+{
+    BGSlice *slice = BGSlice_new(int, 3, 10, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
 
-//     BGSlice_free(slice);
-// }
+    TEST_ASSERT_EQUAL(7, BGSlice_get_usable_cap(slice));
+    TEST_ASSERT_EQUAL(10, BGSlice_get_cap(slice));
 
-// Test BGSlice_append
-// void
-// test_BGSlice_append(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(5, 0, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+    BGSlice_set_len(slice, 8);
+    TEST_ASSERT_EQUAL(2, BGSlice_get_usable_cap(slice));
+    TEST_ASSERT_EQUAL(10, BGSlice_get_cap(slice));
 
-//     int value1 = 42;
-//     int value2 = 84;
+    slice = BGSlice_append(slice, &(int) { 1 });
+    slice = BGSlice_append(slice, &(int) { 2 });
+    slice = BGSlice_append(slice, &(int) { 3 });
+    slice = BGSlice_append(slice, &(int) { 4 });
 
-//     slice = BGSlice_append(slice, &value1);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     ASSERT_SLICE_LEN(slice, 1);
+    TEST_ASSERT_EQUAL(8, BGSlice_get_usable_cap(slice));
+    TEST_ASSERT_EQUAL(20, BGSlice_get_cap(slice));
 
-//     slice = BGSlice_append(slice, &value2);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     ASSERT_SLICE_LEN(slice, 2);
+    BGSlice_free(slice);
+}
 
-//     int *data = (int *) BGSlice_get_data_ptr(slice);
-//     TEST_ASSERT_EQUAL(42, data[0]);
-//     TEST_ASSERT_EQUAL(84, data[1]);
+///////////////////////
+// Append
+//
+void
+test_BGSlice_append(void)
+{
+    BGSlice *slice = BGSlice_new(5, 0, sizeof(int), NULL);
+    TEST_ASSERT_NOT_NULL(slice);
 
-//     BGSlice_free(slice);
-// }
+    int value1 = 42;
+    int value2 = 84;
 
-// Test BGSlice_append with growth
-// void
-// test_BGSlice_append_with_growth(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(2, 0, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+    slice = BGSlice_append(slice, &value1);
+    TEST_ASSERT_NOT_NULL(slice);
+    ASSERT_SLICE_LEN(slice, 1);
 
-//     int values[] = { 1, 2, 3, 4 };
+    slice = BGSlice_append(slice, &value2);
+    TEST_ASSERT_NOT_NULL(slice);
+    ASSERT_SLICE_LEN(slice, 2);
 
-//     for (int i = 0; i < 4; i++) {
-//         slice = BGSlice_append(slice, &values[i]);
-//         ASSERT_SLICE_NOT_NULL(slice);
-//     }
+    int *data = (int *) BGSlice_get_data_ptr(slice);
+    TEST_ASSERT_EQUAL(42, data[0]);
+    TEST_ASSERT_EQUAL(84, data[1]);
 
-//     ASSERT_SLICE_LEN(slice, 4);
-//     TEST_ASSERT_GREATER_OR_EQUAL(4, BGSlice_get_cap(slice));
+    BGSlice_free(slice);
+}
 
-//     int *data = (int *) BGSlice_get_data_ptr(slice);
-//     for (int i = 0; i < 4; i++) {
-//         TEST_ASSERT_EQUAL(values[i], data[i]);
-//     }
+///////////////////////
+// Retrieval
+//
+void
+test_BGSlice_get(void)
+{
+    bg_expect_assertion({ BGSlice_get(NULL, 0); }, "NULL slice");
 
-//     BGSlice_free(slice);
-// }
+    ///////////////////////
+    // Slice has data
+    //
+    {
+        int data[] = { 10, 20, 30, 40, 50 };
+        BGSlice *slice =
+            BGSlice_new_copy_from_buf(data, 5, 5, BG_SIZE_AUTO, NULL);
+        TEST_ASSERT_NOT_NULL(slice);
 
-// Test BGSlice_get
-// void
-// test_BGSlice_get(void)
-// {
-//     int data[] = { 10, 20, 30, 40, 50 };
-//     struct BGSlice *slice =
-//         BGSlice_copy_from_buf(data, 5, 5, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+        for (size_t i = 0; i < 5; i++) {
+            int *ptr = (int *) BGSlice_get(slice, i);
+            TEST_ASSERT_NOT_NULL(ptr);
+            TEST_ASSERT_EQUAL(data[i], *ptr);
+        }
 
-//     int *ptr = (int *) BGSlice_get(slice, 0);
-//     TEST_ASSERT_NOT_NULL(ptr);
-//     TEST_ASSERT_EQUAL(10, *ptr);
+        // Test out of bounds access (possibly segfault if bounds checking
+        // is disabled)
+        bg_expect_assertion({ BGSlice_get(slice, 5); }, "OOB access");
 
-//     ptr = (int *) BGSlice_get(slice, 2);
-//     TEST_ASSERT_NOT_NULL(ptr);
-//     TEST_ASSERT_EQUAL(30, *ptr);
+        BGSlice_free(slice);
+    }
 
-//     ptr = (int *) BGSlice_get(slice, 4);
-//     TEST_ASSERT_NOT_NULL(ptr);
-//     TEST_ASSERT_EQUAL(50, *ptr);
+    ///////////////////////
+    // Slice zero length
+    //
+    {
+        BGSlice *slice = BGSlice_new(0, 0, sizeof(int), NULL);
+        TEST_ASSERT_NOT_NULL(slice);
+        bg_expect_assertion({ BGSlice_get_last(slice); }, "OOB access");
+        BGSlice_free(slice);
+    }
+}
 
-//     // Test out of bounds access (should return NULL if bounds checking is
-//     // disabled)
-//     ptr = (int *) BGSlice_get(slice, 5);
-//     TEST_ASSERT_NULL(ptr);
+///////////////////////
+// Slice copy, copy_from_buf, copy_from_slice
+//
+void
+test_BGSlice_copy(void)
+{
+    {
+        int src_data[] = { 1, 2, 3, 4, 5 };
+        BGSlice *src =
+            BGSlice_new_copy_from_buf(src_data, 5, 5, BG_SIZE_AUTO, NULL);
+        BGSlice *dst = BGSlice_new(int, 5, 5, NULL);
+        TEST_ASSERT_NOT_NULL(src);
+        TEST_ASSERT_NOT_NULL(dst);
 
-//     BGSlice_free(slice);
-// }
+        ssize_t copied = BGSlice_copy(dst, src);
+        TEST_ASSERT_EQUAL(5, copied);
 
-// Test BGSlice_get_last
-// void
-// test_BGSlice_get_last(void)
-// {
-//     int data[] = { 10, 20, 30 };
-//     struct BGSlice *slice =
-//         BGSlice_copy_from_buf(data, 5, 3, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+        int *dst_data = (int *) BGSlice_get_data_ptr(dst);
+        TEST_ASSERT_EQUAL_MEMORY_MESSAGE(
+            src_data, dst_data, 5 * sizeof(int),
+            "slice data is not equal to src data");
 
-//     int *last = (int *) BGSlice_get_last(slice);
-//     TEST_ASSERT_NOT_NULL(last);
-//     TEST_ASSERT_EQUAL(30, *last);
+        BGSlice_append(src, &(int) { 6 });
+        // appending the src should not change the dst
+        if (!memcmp(src_data, dst_data, 6 * sizeof(int))) {
+            TEST_FAIL_MESSAGE("slice data is equal to src data after append");
+        }
 
-//     BGSlice_free(slice);
-// }
+        BGSlice_free(src);
+        BGSlice_free(dst);
+    }
 
-// void
-// test_BGSlice_get_last_empty_slice(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(5, 0, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+    {
+        int src_data[] = { 1, 2, 3, 4, 5 };
+        BGSlice *src = BGSlice_new_copy_from_buf(src_data, 5, 5, 5, NULL);
+        BGSlice *dst = BGSlice_new(int, 3, 10, NULL);
+        TEST_ASSERT_NOT_NULL(src);
+        TEST_ASSERT_NOT_NULL(dst);
 
-//     int *last = (int *) BGSlice_get_last(slice);
-//     TEST_ASSERT_NULL(last);
+        ssize_t copied = BGSlice_copy(dst, src);
+        TEST_ASSERT_EQUAL(3, copied); // min(dst->len, src->len)
 
-//     BGSlice_free(slice);
-// }
+        int *dst_data = (int *) BGSlice_get_data_ptr(dst);
+        for (int i = 0; i < 3; i++) {
+            TEST_ASSERT_EQUAL(src_data[i], dst_data[i]);
+        }
+        for (int i = 3; i < 5; i++) {
+            TEST_ASSERT_NOT_EQUAL(src_data[i], dst_data[i]);
+        }
 
-// Test BGSlice_is_full
-// void
-// test_BGSlice_is_full(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(3, 2, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
+        BGSlice_free(src);
+        BGSlice_free(dst);
+    }
+}
 
-//     TEST_ASSERT_FALSE(BGSlice_is_full(slice));
+extern BGSlice *BGSlice_grow_to_cap(BGSlice *s, size_t cap);
 
-//     BGSlice_set_len(slice, 3);
-//     TEST_ASSERT_TRUE(BGSlice_is_full(slice));
+///////////////////////
+// Growing
+//
+void
+test_BGSlice_grow_to_cap(void)
+{
+    int data[] = { 1, 2, 3, 4, 5 };
+    BGSlice *slice = BGSlice_new_copy_from_buf(data, 5, 5, 5, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
+    ASSERT_SLICE_CAP(slice, 5);
 
-//     BGSlice_free(slice);
-// }
+    slice = BGSlice_grow_to_cap(slice, 10);
+    TEST_ASSERT_NOT_NULL(slice);
+    ASSERT_SLICE_CAP(slice, 10);
+    ASSERT_SLICE_LEN(slice, 5);
 
-// Test BGSlice_copy
-// void
-// test_BGSlice_copy(void)
-// {
-//     int src_data[] = { 1, 2, 3, 4, 5 };
-//     struct BGSlice *src =
-//         BGSlice_copy_from_buf(src_data, 5, 5, sizeof(int), NULL);
-//     struct BGSlice *dst = BGSlice_new(5, 5, sizeof(int), NULL);
+    // the first 5 items should be the same as the original
+    TEST_ASSERT_EQUAL_MEMORY(data, (int *) BGSlice_get_data_ptr(slice),
+                             5 * sizeof(int));
 
-//     ASSERT_SLICE_NOT_NULL(src);
-//     ASSERT_SLICE_NOT_NULL(dst);
+    // Test growing to smaller capacity (should not change)
+    bg_expect_assertion(
+        { BGSlice_grow_to_cap(slice, 5); },
+        "cannot grow slice to smaller capacity");
+    ASSERT_SLICE_CAP(slice, 10); // should remain unchanged
 
-//     ssize_t copied = BGSlice_copy(dst, src);
-//     TEST_ASSERT_EQUAL(5, copied);
+    BGSlice_free(slice);
+}
 
-//     int *dst_data = (int *) BGSlice_get_data_ptr(dst);
-//     for (int i = 0; i < 5; i++) {
-//         TEST_ASSERT_EQUAL(src_data[i], dst_data[i]);
-//     }
+extern size_t BGSlice_new_cap(BGSlice *s);
 
-//     BGSlice_free(src);
-//     BGSlice_free(dst);
-// }
+void
+test_BGSlice_new_cap(void)
+{
+    BGSlice *small_slice = BGSlice_new(int, 50, 100, NULL);
+    TEST_ASSERT_NOT_NULL(small_slice);
+    size_t new_cap = BGSlice_new_cap(small_slice);
+    TEST_ASSERT_EQUAL(200, new_cap);
+    BGSlice_free(small_slice);
 
-// // Test BGSlice_copy with different sizes
-// void
-// test_BGSlice_copy_different_sizes(void)
-// {
-//     int src_data[] = { 1, 2, 3, 4, 5 };
-//     struct BGSlice *src =
-//         BGSlice_copy_from_buf(src_data, 5, 5, sizeof(int), NULL);
-//     struct BGSlice *dst = BGSlice_new(10, 3, sizeof(int), NULL);
+    // Test large slice (>= 256)
+    BGSlice *large_slice = BGSlice_new(int, 150, 300, NULL);
+    TEST_ASSERT_NOT_NULL(small_slice);
+    new_cap = BGSlice_new_cap(large_slice);
+    TEST_ASSERT_EQUAL(375, new_cap); // 300 * 1.25
+    BGSlice_free(large_slice);
+}
 
-//     ASSERT_SLICE_NOT_NULL(src);
-//     ASSERT_SLICE_NOT_NULL(dst);
+///////////////////////
+// Range
+//
+bool
+sum_callback(void *item, size_t index, void *ctx)
+{
+    int *sum = (int *) ctx;
+    int *value = (int *) item;
+    *sum += *value;
+    return true; // continue iteration
+}
 
-//     ssize_t copied = BGSlice_copy(dst, src);
-//     TEST_ASSERT_EQUAL(3, copied); // min(dst->len, src->len)
+struct stop_at_index_ctx {
+    size_t stop_index;
+    size_t actual_stop_index;
+};
 
-//     int *dst_data = (int *) BGSlice_get_data_ptr(dst);
-//     for (int i = 0; i < 3; i++) {
-//         TEST_ASSERT_EQUAL(src_data[i], dst_data[i]);
-//     }
+bool
+stop_at_index_callback(void *item, size_t index, void *ctx)
+{
+    struct stop_at_index_ctx *cctx = (struct stop_at_index_ctx *) ctx;
+    if (index == cctx->stop_index) {
+        cctx->actual_stop_index = index;
+        return false; // stop when we reach the specified index
+    }
+    return true;
+}
 
-//     BGSlice_free(src);
-//     BGSlice_free(dst);
-// }
+void
+test_BGSlice_range_sum(void)
+{
+    int data[] = { 1, 2, 3, 4, 5 };
+    BGSlice *slice =
+        BGSlice_new_copy_from_buf(data, 5, 5, BG_SIZE_AUTO, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
 
-// // Test BGSlice_grow_to_cap
-// void
-// test_BGSlice_grow_to_cap(void)
-// {
-//     struct BGSlice *slice = BGSlice_new(5, 3, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     ASSERT_SLICE_CAP(slice, 5);
+    int sum = 0;
+    BGSlice_range(slice, &sum, sum_callback);
+    TEST_ASSERT_EQUAL(15, sum);
 
-//     slice = BGSlice_grow_to_cap(slice, 10);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     ASSERT_SLICE_CAP(slice, 10);
-//     ASSERT_SLICE_LEN(slice, 3); // length should remain unchanged
+    BGSlice_free(slice);
+}
 
-//     // Test growing to smaller capacity (should not change)
-//     slice = BGSlice_grow_to_cap(slice, 5);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     ASSERT_SLICE_CAP(slice, 10); // should remain unchanged
+void
+test_BGSlice_range_early_stop(void)
+{
+    int data[] = { 1, 2, 3, 4, 5 };
+    BGSlice *slice =
+        BGSlice_new_copy_from_buf(data, 5, 5, BG_SIZE_AUTO, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
 
-//     BGSlice_free(slice);
-// }
+    struct stop_at_index_ctx stop_at = { 3, 0 };
 
-// // Test new_cap calculation
-// void
-// test_BGSlice_new_cap(void)
-// {
-//     // Test small slice (< 256)
-//     struct BGSlice *small_slice = BGSlice_new(100, 50, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(small_slice);
-//     size_t new_cap = BGSlice_new_cap(small_slice);
-//     TEST_ASSERT_EQUAL(200, new_cap); // 100 * 2
-//     BGSlice_free(small_slice);
+    BGSlice_range(slice, &stop_at, stop_at_index_callback);
 
-//     // Test large slice (>= 256)
-//     struct BGSlice *large_slice = BGSlice_new(300, 150, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(large_slice);
-//     new_cap = BGSlice_new_cap(large_slice);
-//     TEST_ASSERT_EQUAL(375, new_cap); // 300 * 1.25
-//     BGSlice_free(large_slice);
-// }
+    TEST_ASSERT_EQUAL(3, stop_at.actual_stop_index);
 
-// // Range callback for testing
-// bool
-// sum_callback(void *item, size_t index, void *ctx)
-// {
-//     int *sum = (int *) ctx;
-//     int *value = (int *) item;
-//     *sum += *value;
-//     return true; // continue iteration
-// }
-
-// bool
-// stop_at_index_callback(void *item, size_t index, void *ctx)
-// {
-//     size_t *stop_index = (size_t *) ctx;
-//     return index < *stop_index; // stop when we reach the specified index
-// }
-
-// // Test BGSlice_range
-// void
-// test_BGSlice_range_sum(void)
-// {
-//     int data[] = { 1, 2, 3, 4, 5 };
-//     struct BGSlice *slice =
-//         BGSlice_copy_from_buf(data, 5, 5, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
-
-//     int sum = 0;
-//     BGSlice_range(slice, &sum, sum_callback);
-//     TEST_ASSERT_EQUAL(15, sum); // 1+2+3+4+5
-
-//     BGSlice_free(slice);
-// }
-
-// void
-// test_BGSlice_range_early_stop(void)
-// {
-//     int data[] = { 1, 2, 3, 4, 5 };
-//     struct BGSlice *slice =
-//         BGSlice_copy_from_buf(data, 5, 5, sizeof(int), NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
-
-//     size_t stop_at = 3;
-//     int sum = 0;
-
-//     // Custom callback that sums and stops at index 3
-//     BGSlice_range(slice, &stop_at, stop_at_index_callback);
-
-//     // We can't easily test the early stop without modifying the callback,
-//     // but we can test that the function doesn't crash with early return
-//     TEST_ASSERT_TRUE(true); // Just verify no crash occurred
-
-//     BGSlice_free(slice);
-// }
+    BGSlice_free(slice);
+}
 
 // Test with custom allocator option (if needed)
 // void
@@ -424,29 +401,9 @@ test_BGSlice_len_operations(void)
 //     BGSlice_free(slice);
 // }
 
-// Test char slice operations
-// void
-// test_BGSlice_char_operations(void)
-// {
-//     struct BGSlice *slice = BGSlice_char_new(10, 0, NULL);
-//     ASSERT_SLICE_NOT_NULL(slice);
-
-//     char c1 = 'A';
-//     char c2 = 'B';
-
-//     slice = BGSlice_append(slice, &c1);
-//     ASSERT_SLICE_NOT_NULL(slice);
-//     slice = BGSlice_append(slice, &c2);
-//     ASSERT_SLICE_NOT_NULL(slice);
-
-//     ASSERT_SLICE_LEN(slice, 2);
-
-//     char *data = (char *) BGSlice_get_data_ptr(slice);
-//     TEST_ASSERT_EQUAL('A', data[0]);
-//     TEST_ASSERT_EQUAL('B', data[1]);
-
-//     BGSlice_free(slice);
-// }
+///////////////////////
+// Integration tests
+//
 
 typedef struct {
     void (*test_func)(void);
@@ -457,22 +414,15 @@ static const test_case_t all_tests[] = {
     { test_BGSlice_new, "test_BGSlice_new" },
     { test_BGSlice_reset, "test_BGSlice_reset" },
     { test_BGSlice_len_operations, "test_BGSlice_len_operations" },
-    // { test_BGSlice_incr_len, "test_BGSlice_incr_len" },
-    // { test_BGSlice_get_usable_cap, "test_BGSlice_get_usable_cap" },
-    // { test_BGSlice_append, "test_BGSlice_append" },
-    // { test_BGSlice_append_with_growth, "test_BGSlice_append_with_growth" },
-    // { test_BGSlice_get, "test_BGSlice_get" },
-    // { test_BGSlice_get_last, "test_BGSlice_get_last" },
-    // { test_BGSlice_get_last_empty_slice,
-    //   "test_BGSlice_get_last_empty_slice" },
-    // { test_BGSlice_is_full, "test_BGSlice_is_full" },
-    // { test_BGSlice_copy, "test_BGSlice_copy" },
-    // { test_BGSlice_copy_different_sizes,
-    //   "test_BGSlice_copy_different_sizes" },
-    // { test_BGSlice_grow_to_cap, "test_BGSlice_grow_to_cap" },
-    // { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
-    // { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
-    // { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
+    { test_BGSlice_incr_len, "test_BGSlice_incr_len" },
+    { test_BGSlice_get_cap_funcs, "test_BGSlice_get_cap_funcs" },
+    { test_BGSlice_append, "test_BGSlice_append" },
+    { test_BGSlice_get, "test_BGSlice_get" },
+    { test_BGSlice_copy, "test_BGSlice_copy" },
+    { test_BGSlice_grow_to_cap, "test_BGSlice_grow_to_cap" },
+    { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
+    { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
+    { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
     // { test_BGSlice_with_null_option, "test_BGSlice_with_null_option" },
     // { test_BGSlice_char_operations, "test_BGSlice_char_operations" }
 };

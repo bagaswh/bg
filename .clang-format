@@ -46,6 +46,7 @@ PointerAlignment: Right
 SpacesBeforeTrailingComments: 1
 Cpp11BracedListStyle: false
 Standard:        Cpp03
+IndentPPDirectives: AfterHash
 IndentWidth:     4
 TabWidth:        8
 UseTab:          Never
@@ -59,7 +60,6 @@ SpaceAfterCStyleCast: true
 SpacesInContainerLiterals: true
 SpaceBeforeAssignmentOperators: true
 ContinuationIndentWidth: 4
-CommentPragmas:  '^ NetHack 3'
 ForEachMacros:   [ foreach, Q_FOREACH, BOOST_FOREACH ]
 SpaceBeforeParens: ControlStatements
 DisableFormat:   false
