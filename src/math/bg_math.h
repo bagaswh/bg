@@ -1,8 +1,8 @@
-#ifndef MATH_H
-#define MATH_H
+#ifndef BG_MATH_H
+#define BG_MATH_H
 
-#include "common.h"
-#include "types.h"
+#include "bg_common.h"
+#include "bg_types.h"
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

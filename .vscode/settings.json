@@ -34,7 +34,11 @@
         "type_traits": "c",
         "utility": "c",
         "testutils.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "bg_slice.h": "c",
+        "stdio.h": "c",
+        "stdarg.h": "c",
+        "bg_allocator.h": "c"
     },
     "cmake.ignoreCMakeListsMissing": true
 }

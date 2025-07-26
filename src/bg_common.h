@@ -1,6 +1,10 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 #ifndef bg_likely
 #    define bg_likely(x) __builtin_expect(!!(x), 1)
 #    define bg_unlikely(x) __builtin_expect(!!(x), 0)
@@ -53,14 +57,15 @@ static const bool assert_enabled =
 
 #ifdef __BG_RUNNING_TEST__
 #    include <setjmp.h>
-static void BG_INLINE
+static void
 __bg_abort__(void)
 {
+    // see testutils.h for context
     extern jmp_buf test_resume_env;
     longjmp(test_resume_env, 1);
 }
 #else
-static void BG_INLINE
+static void
 __bg_abort__(void)
 {
     BG_DEBUG_TRAP();
@@ -69,7 +74,7 @@ __bg_abort__(void)
 
 #ifndef BG_NO_PRINT_STACK_TRACE
 #    include <execinfo.h>
-static void BG_INLINE
+static void
 print_backtrace(char *component)
 {
     void *bt[32];
@@ -122,7 +127,7 @@ print_backtrace(char *component)
         } while (0)
 #endif
 
-static void BG_INLINE
+static void
 bg_swap_generic(void *a, void *b, void *tmp, size_t size)
 {
     memcpy(tmp, a, size);

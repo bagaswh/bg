@@ -2,7 +2,7 @@
  * Performs fast modulus operation.
  */
 
-#ifndef FASTMOD_H
-#define FASTMOD_H
+#ifndef BG_FASTMOD_H
+#define BG_FASTMOD_H
 
 #endif  // FASTMOD_H

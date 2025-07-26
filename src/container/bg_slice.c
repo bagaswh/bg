@@ -1,14 +1,14 @@
-#include "slice.h"
+#include "bg_slice.h"
 
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "common.h"
-#include "math.h"
-#include "mem/allocator.h"
-#include "types.h"
+#include "bg_common.h"
+#include "bg_types.h"
+#include "math/bg_math.h"
+#include "mem/bg_allocator.h"
 
 #define min(a, b) (a < b ? a : b)
 #define max(a, b) (a > b ? a : b)
@@ -62,6 +62,13 @@ BGSlice_with_allocator(struct BGSliceOption *option,
                        struct Allocator *allocator)
 {
     assert_slice(allocator != NULL, "allocator cannot be NULL");
+
+    if (option == NULL) {
+        option = malloc(sizeof(struct BGSliceOption));
+        if (option == NULL)
+            return NULL;
+    }
+
     option->allocator = allocator;
     return option;
 }
@@ -518,6 +525,16 @@ BGSlice_get(BGSlice_s *s, size_t index)
 }
 
 void *
+BGSlice_set(BGSlice_s *s, size_t index, void *item)
+{
+    assert_slice(s != NULL, "slice cannot be NULL");
+    assert_slice_len_bound_check(s, index);
+
+    memcpy(s->buf + BGSlice_get_size_in_bytes(s, index), item, s->elem_size);
+    return item;
+}
+
+void *
 BGSlice_get_last(BGSlice_s *s)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
@@ -564,8 +581,8 @@ BGSlice_default_comparator_desc(BGSlice_s *s, comparable a, comparable b,
 }
 
 enum BGStatus
-BGSlice_sort_insertion(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
-                       BGSlice_sort_comparator comparator)
+BGSlice_isort(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
+              BGSlice_sort_comparator comparator)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
 
@@ -598,45 +615,197 @@ BGSlice_sort_insertion(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
     }
 }
 
-void *
-BGSlice_mo3_pick_median(BGSlice *s)
+static bool
+print_slice_item(void *item, size_t idx, void *ctx)
 {
+    int *value = (int *) item;
+    printf("%d ", *value);
+    return true;
+}
+
+static struct pivot_buf_t {
+    void *value;
+    size_t index;
+};
+
+struct qsort_mo3_pick_median_args {
+    BGSlice_s *s;
+    BGSlice_s *pivot_indices;
+    size_t low;
+    size_t high;
+    size_t median_idx_result;
+};
+
+void
+BGSlice_qsort_mo3_pick_median(struct qsort_mo3_pick_median_args *args)
+{
+    size_t space_size = args->high - args->low;
+
     struct fastrand rng = bg_fast_rand_init();
 
-    size_t one_idx, two_idx, three_idx;
-    one_idx = fast_rand_n(&s->rng, s->len);
-    BGSlice_get(s, one_idx, &s->pivot_picker_buf[0]);
+    for (size_t i = 0; i < 3; i++) {
+        size_t idx = bg_fast_rand_n(&rng, space_size) + args->low;
+        for (ssize_t j = i - 1; j > 0; j--) {
+            while (idx == *(size_t *) BGSlice_get(args->pivot_indices, j)) {
+                idx = bg_fast_rand_n(&rng, space_size) + args->low;
+            }
+        }
+        BGSlice_set(args->pivot_indices, i, &idx);
+    }
 
-} // void *BGSlice_sort_mo3_median();
+    BGSlice_isort(args->pivot_indices, NULL, NULL, NULL);
+    args->median_idx_result = *(size_t *) BGSlice_get(args->pivot_indices, 1);
+}
 
-// void *BGSlice_sort_mo3_partition();
+struct qsort_mo3_partition_args {
+    BGSlice_s *s;
+    size_t low;
+    size_t high;
+    void *swap_tmp;
+    size_t median_idx_result;
+    BGSlice *pivot_indices;
+};
 
-// // BGSlice_sort is an implementation of quicksort.
-// size_t
-// BGSlice_sort(BGSlice *__s, void *ctx, BGSlice_sort_key_fn key_fn,
-//              BGSlice_sort_comparator comparator)
-// {
-//     BGSlice_s *s = __s;
+void
+BGSlice_qsort_mo3_partition(struct qsort_mo3_partition_args *args)
+{
+    struct qsort_mo3_pick_median_args margs = {
+        .s = args->s,
+        .pivot_indices = args->pivot_indices,
+        .low = args->low,
+        .high = args->high,
+    };
 
-//     assert_slice(s == NULL || key_fn == NULL,
-//                  "slice or key_fn cannot be NULL");
+    BGSlice_qsort_mo3_pick_median(&margs);
 
-//     if (s->len <= 1)
-//         return 0;
+    size_t median_idx = margs.median_idx_result;
 
-//     if (s->len <= 3) {
-//         BGSlice_sort_insertion(s, ctx, key_fn, comparator);
-//         return s->len;
-//     }
+    // printf("median_idx=%zu\n", median_idx);
 
-//     void *first = BGSlice_get_ptr_begin_offset(s);
-//     void *last = BGSlice_get_last(s);
-//     size_t mid = s->len / 2;
-//     void *mid_item = BGSlice_get(s, mid);
-//     void *pivot = mid_item;
-//     swap(pivot, last, s->elem_size);
-//     size_t left_idx = 0;
-//     size_t right_idx = s->len - 2;
-//     while (left_idx <= right_idx) {
-//     }
-// }
+    bg_swap_generic(BGSlice_get(args->s, median_idx),
+                    BGSlice_get(args->s, args->high - 1), args->swap_tmp,
+                    args->s->elem_size);
+
+    void *pivot = BGSlice_get(args->s, args->high - 1);
+    ssize_t i = args->low;
+    ssize_t j = args->high - 2;
+
+    while (1) {
+        while (1) {
+            if (memcmp(BGSlice_get(args->s, i), pivot, args->s->elem_size)
+                >= 0)
+                break;
+            if (i < args->high - 1)
+                i++;
+            else
+                break;
+        }
+        while (1) {
+            if (memcmp(BGSlice_get(args->s, j), pivot, args->s->elem_size)
+                <= 0)
+                break;
+            if (j > 0)
+                j--;
+            else
+                break;
+        }
+        if (i >= j)
+            break;
+
+        bg_swap_generic(BGSlice_get(args->s, i), BGSlice_get(args->s, j),
+                        args->swap_tmp, args->s->elem_size);
+    }
+    bg_swap_generic(BGSlice_get(args->s, i), pivot, args->swap_tmp,
+                    args->s->elem_size);
+    args->median_idx_result = i;
+}
+
+struct __qsort_args {
+    BGSlice_s *s;
+    void *ctx;
+    BGSlice_sort_key_fn key_fn;
+    BGSlice_sort_comparator comparator;
+    size_t low;
+    size_t high;
+    void *swap_tmp;
+    BGSlice *pivot_indices;
+};
+
+void
+__BGSlice_qsort(struct __qsort_args *args)
+{
+    struct qsort_mo3_partition_args partition_args = {
+        .s = args->s,
+        .low = args->low,
+        .high = args->high,
+        .swap_tmp = args->swap_tmp,
+        .pivot_indices = args->pivot_indices,
+    };
+
+    BGSlice_qsort_mo3_partition(&partition_args);
+
+    size_t pivot_idx = partition_args.median_idx_result;
+
+    args->low = args->low;
+    args->high = pivot_idx - 1;
+    __BGSlice_qsort(args);
+
+    args->low = pivot_idx + 1;
+    args->high = args->high;
+    __BGSlice_qsort(args);
+}
+
+// BGSlice_qsort is an implementation of quicksort.
+enum BGStatus
+BGSlice_qsort(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
+              BGSlice_sort_comparator comparator)
+{
+    assert_slice(s != NULL, "slice cannot be NULL");
+
+    if (s->len <= 1)
+        return BG_OK;
+
+    key_fn = key_fn == NULL ? BGSlice_key_fn_default : key_fn;
+    comparator =
+        comparator == NULL ? BGSlice_default_comparator_asc : comparator;
+
+    if (s->len <= 15) {
+        BGSlice_isort(s, ctx, key_fn, comparator);
+        return s->len;
+    }
+
+    enum BGStatus ret;
+
+    void *swap_tmp = s->allocator->malloc(s->elem_size);
+    if (swap_tmp == NULL) {
+        ret = BG_ERR_ALLOC;
+        goto free_swap_tmp;
+    }
+
+    BGSlice *pivot_indices = __BGSlice_new(
+        3, 3, sizeof(size_t), BGSlice_with_allocator(NULL, s->allocator));
+    if (pivot_indices == NULL) {
+        ret = BG_ERR_ALLOC;
+        goto free_pivot_indices;
+    }
+
+    struct __qsort_args args = {
+        .s = s,
+        .ctx = ctx,
+        .key_fn = key_fn,
+        .comparator = comparator,
+        .low = 0,
+        .high = s->len,
+        .swap_tmp = swap_tmp,
+        .pivot_indices = pivot_indices,
+    };
+
+    __BGSlice_qsort(&args);
+
+free_pivot_indices:
+    s->allocator->free(pivot_indices);
+free_swap_tmp:
+    s->allocator->free(swap_tmp);
+
+    return ret;
+}

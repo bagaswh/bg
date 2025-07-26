@@ -1,12 +1,12 @@
-#include "slice.h"
+#include "bg_slice.h"
 #include "unity.h"
 #include <signal.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "common.h"
-#include "testutils.h"
+#include "bg_common.h"
+#include "bg_testutils.h"
 
 #define ASSERT_SLICE_LEN(slice, expected) \
     TEST_ASSERT_EQUAL(expected, BGSlice_get_len(slice))
@@ -404,11 +404,11 @@ test_BGSlice_append(void)
 // Sorting
 //
 
-extern enum BGStatus
-BGSlice_sort_insertion(BGSlice *s, void *ctx, BGSlice_sort_key_fn key_fn,
-                       BGSlice_sort_comparator comparator);
+extern enum BGStatus BGSlice_isort(BGSlice *s, void *ctx,
+                                   BGSlice_sort_key_fn key_fn,
+                                   BGSlice_sort_comparator comparator);
 
-bool
+static bool
 print_slice_item(void *item, size_t idx, void *ctx)
 {
     int *value = (int *) item;
@@ -445,29 +445,59 @@ validate_sorted(void *item, size_t idx, void *ctx)
     return true;
 }
 
+struct qsort_mo3_partition_args {
+    BGSlice_s *s;
+    size_t low;
+    size_t high;
+    void *swap_tmp;
+    size_t median_idx_result;
+    BGSlice *pivot_indices;
+};
+
+enum BGStatus
+BGSlice_qsort_mo3_partition(struct qsort_mo3_partition_args *args);
+
 void
-test_BGSlice_insertion_sort(void)
+test_BGSlice_sorting(void)
 {
-    int data[] = {
-        7, 4, 1, 3, 8, 2, 2, 5, 1, 1441, 6, 8, 3, 7, 11, 331, 41,
-    };
+    // Unit test the insertion sort.
 
-    BGSlice *slice_sort_asc = BGSlice_new_copy_from_buf(
-        data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO, NULL);
-    TEST_ASSERT_NOT_NULL(slice_sort_asc);
+    {
+        int data[] = {
+            7, 4, 1, 3, 8, 2, 2, 5, 1, 1441, 6, 8, 3, 7, 11, 331, 41,
+        };
 
-    BGSlice_sort_insertion(slice_sort_asc, NULL, NULL, NULL);
-    struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
-    BGSlice_range(slice_sort_asc, &ctx_asc, validate_sorted);
+        BGSlice *slice_sort_asc = BGSlice_new_copy_from_buf(
+            data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
+            NULL);
+        TEST_ASSERT_NOT_NULL(slice_sort_asc);
 
-    BGSlice *slice_sort_desc = BGSlice_new_copy_from_buf(
-        data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO, NULL);
-    TEST_ASSERT_NOT_NULL(slice_sort_desc);
+        BGSlice_isort(slice_sort_asc, NULL, NULL, NULL);
+        struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
+        BGSlice_range(slice_sort_asc, &ctx_asc, validate_sorted);
 
-    BGSlice_sort_insertion(slice_sort_desc, NULL, NULL,
-                           BGSlice_default_comparator_desc);
-    struct sort_test_ctx ctx_desc = { .prev = NULL, .asc = false };
-    BGSlice_range(slice_sort_desc, &ctx_desc, validate_sorted);
+        BGSlice *slice_sort_desc = BGSlice_new_copy_from_buf(
+            data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
+            NULL);
+        TEST_ASSERT_NOT_NULL(slice_sort_desc);
+
+        BGSlice_isort(slice_sort_desc, NULL, NULL,
+                      BGSlice_default_comparator_desc);
+        struct sort_test_ctx ctx_desc = { .prev = NULL, .asc = false };
+        BGSlice_range(slice_sort_desc, &ctx_desc, validate_sorted);
+    }
+
+    // Unit test qsort
+    {
+        int data[] = { 2, 8, 7, 1, 3, 5, 6, 4 };
+        size_t arr_length = bg_arr_length(data);
+        BGSlice *slice =
+            BGSlice_new_copy_from_array(data, arr_length, BG_SIZE_AUTO, NULL);
+        size_t pivot_idx;
+        BGSlice_qsort(slice, NULL, NULL, NULL);
+        struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
+        BGSlice_range(slice, &ctx_asc, validate_sorted);
+    }
 }
 
 typedef struct {
@@ -488,7 +518,7 @@ static const test_case_t all_tests[] = {
     { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
     { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
     { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
-    { test_BGSlice_insertion_sort, "test_BGSlice_insertion_sort" },
+    { test_BGSlice_sorting, "test_BGSlice_sorting" },
     // { test_BGSlice_with_null_option, "test_BGSlice_with_null_option" },
     // { test_BGSlice_char_operations, "test_BGSlice_char_operations" }
 };
