@@ -33,7 +33,8 @@
         "tuple": "c",
         "type_traits": "c",
         "utility": "c",
-        "testutils.h": "c"
+        "testutils.h": "c",
+        "math.h": "c"
     },
     "cmake.ignoreCMakeListsMissing": true
 }

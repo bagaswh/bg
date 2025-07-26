@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "math.h"
 #include "mem/allocator.h"
 #include "types.h"
 
@@ -538,57 +539,75 @@ BGSlice_range(BGSlice_s *s, void *ctx, BGSlice_range_callback callback)
     }
 }
 
-// typedef u8 *comparable;
-// typedef comparable (*BGSlice_sort_get_key_fn)(void *item, size_t idx);
+////////////////////
+// Sorting
+//
 
-// void
-// swap(void *a, void *b, size_t size)
-// {
-//     char tmp[size];
-//     memcpy(tmp, a, size);
-//     memcpy(a, b, size);
-//     memcpy(b, tmp, size);
-// }
+comparable BG_INLINE
+BGSlice_key_fn_default(void *item, size_t idx)
+{
+    return (comparable) item;
+}
 
-// typedef ssize_t (*BGSlice_sort_comparator)(comparable a, comparable b,
-//                                            void *ctx);
-// typedef comparable (*BGSlice_sort_key_fn)(void *item, size_t idx);
+ssize_t
+BGSlice_default_comparator_asc(BGSlice_s *s, comparable a, comparable b,
+                               void *ctx)
+{
+    return memcmp(a, b, s->elem_size);
+}
 
-// comparable
-// BGSlice_get_key_fn_default(void *item, size_t idx)
-// {
-//     return (comparable) item;
-// }
+ssize_t
+BGSlice_default_comparator_desc(BGSlice_s *s, comparable a, comparable b,
+                                void *ctx)
+{
+    return -memcmp(a, b, s->elem_size);
+}
 
-// size_t
-// BGSlice_sort_insertion(BGSlice *__s, void *ctx, BGSlice_sort_key_fn key_fn,
-//                        BGSlice_sort_comparator comparator)
-// {
-//     BGSlice_s *s = __s;
+enum BGStatus
+BGSlice_sort_insertion(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
+                       BGSlice_sort_comparator comparator)
+{
+    assert_slice(s != NULL, "slice cannot be NULL");
 
-//     assert_slice(s != NULL, "slice cannot be NULL");
+    if (s->len <= 1)
+        return 0;
 
-//     if (s->len <= 1)
-//         return 0;
+    key_fn = key_fn == NULL ? BGSlice_key_fn_default : key_fn;
+    comparator =
+        comparator == NULL ? BGSlice_default_comparator_asc : comparator;
 
-//     key_fn = key_fn == NULL ? BGSlice_get_key_fn_default : key_fn;
+    void *swap_tmp = s->allocator->malloc(s->elem_size);
+    if (swap_tmp == NULL)
+        return BG_ERR_ALLOC;
 
-//     for (size_t i = 0; i < s->len; i++) {
-//         ssize_t j = i;
+    for (size_t i = 1; i < s->len; i++) {
+        ssize_t j = i;
 
-//         void *item_a = BGSlice_get(s, j);
-//         comparable key_a = get_key_fn(item_a, j);
-//         void *item_b = BGSlice_get(s, j - 1);
-//         comparable key_b = get_key_fn(item_b, j - 1);
-//         ssize_t compare_ret = comparator(key_a, key_b, ctx);
+        while ((j - 1) >= 0) {
+            void *item_a = BGSlice_get(s, j);
+            comparable key_a = key_fn(item_a, j);
 
-//         while ((j - 1) >= 0 && compare_ret < 0) {
-//             swap(item_a, item_b, s->elem_size);
-//         }
-//     }
-// }
+            void *item_b = BGSlice_get(s, j - 1);
+            comparable key_b = key_fn(item_b, j - 1);
 
-// void *BGSlice_sort_mo3_median();
+            ssize_t compare_ret = comparator(s, key_b, key_a, ctx);
+            if (compare_ret > 0)
+                bg_swap_generic(item_a, item_b, swap_tmp, s->elem_size);
+            j--;
+        }
+    }
+}
+
+void *
+BGSlice_mo3_pick_median(BGSlice *s)
+{
+    struct fastrand rng = bg_fast_rand_init();
+
+    size_t one_idx, two_idx, three_idx;
+    one_idx = fast_rand_n(&s->rng, s->len);
+    BGSlice_get(s, one_idx, &s->pivot_picker_buf[0]);
+
+} // void *BGSlice_sort_mo3_median();
 
 // void *BGSlice_sort_mo3_partition();
 

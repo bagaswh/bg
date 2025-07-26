@@ -109,4 +109,25 @@ print_backtrace(char *component)
         } while (0)
 #endif
 
+#ifndef bg_arr_length
+#    define bg_arr_length(arr) (sizeof(arr) / sizeof(arr[0]))
+#endif
+
+#ifndef bg_swap
+#    define bg_swap(Type, a, b) \
+        do {                    \
+            Type tmp = (a);     \
+            (a) = (b);          \
+            (b) = tmp;          \
+        } while (0)
+#endif
+
+static void BG_INLINE
+bg_swap_generic(void *a, void *b, void *tmp, size_t size)
+{
+    memcpy(tmp, a, size);
+    memcpy(a, b, size);
+    memcpy(b, tmp, size);
+}
+
 #endif // COMMON_H

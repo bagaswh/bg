@@ -5,7 +5,7 @@ LDFLAGS :=
 INCLUDES := -I./src -I./third_party/Unity/src
 
 ASAN_FLAGS := -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize-address-use-after-return=always -fsanitize-address-use-after-scope
-DEBUG_FLAGS := -g -O0
+DEBUG_FLAGS := $(ASAN_FLAGS) -g -O0
 TEST_ASAN_ENV    := ASAN_OPTIONS=detect_leaks=0
 
 SRC_DIR     := src/container

@@ -218,33 +218,6 @@ hoare_partition(int *arr, size_t p, size_t r)
     print_arr_state(arr, i, j, p, r, *pivot);
 }
 
-struct rand {
-    unsigned seed;
-};
-
-#include <time.h>
-
-struct rand
-init_rand()
-{
-    struct timespec ts = { 0, 0 };
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (struct rand) { .seed = ts.tv_nsec };
-}
-
-unsigned
-fast_rand(struct rand *r)
-{
-    r->seed = 214013 * r->seed + 2531011;
-    return (r->seed >> 16) & 0x7fff;
-}
-
-unsigned
-fast_rand_n(struct rand *r, int n)
-{
-    return fast_rand(r) % n;
-}
-
 size_t
 sort_insertion(int *arr, size_t n)
 {

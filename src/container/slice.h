@@ -8,6 +8,11 @@
 #include "mem/allocator.h"
 #include "types.h"
 
+enum BGStatus {
+    BG_OK,
+    BG_ERR_ALLOC,
+};
+
 #define BG_SLICE_MAX_SIZE ((size_t) 0x10000000000)
 #define BG_SIZE_AUTO (BG_SLICE_MAX_SIZE + (size_t) 1)
 
@@ -16,14 +21,6 @@ typedef struct BGSlice_s BGSlice;
 typedef struct BGSliceOption {
     struct Allocator *allocator;
 } BGSliceOption;
-
-typedef bool (*BGSlice_range_callback)(void *item, size_t idx, void *ctx);
-
-typedef u8 *comparable;
-
-typedef ssize_t (*BGSlice_sort_comparator)(comparable a, comparable b,
-                                           void *ctx);
-typedef comparable (*BGSlice_sort_key_fn)(void *item, size_t idx);
 
 struct BGSliceOption *BGSlice_with_allocator(struct BGSliceOption *option,
                                              struct Allocator *allocator);
@@ -71,9 +68,18 @@ ssize_t BGSlice_copy(BGSlice *dst, BGSlice *src);
 void *BGSlice_get(BGSlice *s, size_t index);
 void *BGSlice_get_last(BGSlice *s);
 
+typedef bool (*BGSlice_range_callback)(void *item, size_t idx, void *ctx);
 void BGSlice_range(BGSlice *s, void *ctx, BGSlice_range_callback callback);
 
+typedef i8 *comparable;
+typedef ssize_t (*BGSlice_sort_comparator)(BGSlice *s, comparable a,
+                                           comparable b, void *ctx);
+typedef comparable (*BGSlice_sort_key_fn)(void *item, size_t idx);
 size_t BGSlice_sort(BGSlice *s, void *ctx, BGSlice_sort_key_fn key_fn,
                     BGSlice_sort_comparator comparator);
 
+ssize_t BGSlice_default_comparator_asc(BGSlice *s, comparable a, comparable b,
+                                       void *ctx);
+ssize_t BGSlice_default_comparator_desc(BGSlice *s, comparable a,
+                                        comparable b, void *ctx);
 #endif // SLICE_H

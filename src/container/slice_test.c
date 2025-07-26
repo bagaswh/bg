@@ -158,33 +158,6 @@ test_BGSlice_get_cap_funcs(void)
 }
 
 ///////////////////////
-// Append
-//
-void
-test_BGSlice_append(void)
-{
-    BGSlice *slice = BGSlice_new(5, 0, sizeof(int), NULL);
-    TEST_ASSERT_NOT_NULL(slice);
-
-    int value1 = 42;
-    int value2 = 84;
-
-    slice = BGSlice_append(slice, &value1);
-    TEST_ASSERT_NOT_NULL(slice);
-    ASSERT_SLICE_LEN(slice, 1);
-
-    slice = BGSlice_append(slice, &value2);
-    TEST_ASSERT_NOT_NULL(slice);
-    ASSERT_SLICE_LEN(slice, 2);
-
-    int *data = (int *) BGSlice_get_data_ptr(slice);
-    TEST_ASSERT_EQUAL(42, data[0]);
-    TEST_ASSERT_EQUAL(84, data[1]);
-
-    BGSlice_free(slice);
-}
-
-///////////////////////
 // Retrieval
 //
 void
@@ -246,11 +219,8 @@ test_BGSlice_copy(void)
         TEST_ASSERT_EQUAL_MEMORY_MESSAGE(
             src_data, dst_data, 5 * sizeof(int),
             "slice data is not equal to src data");
-
-        BGSlice_append(src, &(int) { 6 });
-        // appending the src should not change the dst
-        if (!memcmp(src_data, dst_data, 6 * sizeof(int))) {
-            TEST_FAIL_MESSAGE("slice data is equal to src data after append");
+        if (dst_data == src_data) {
+            TEST_FAIL_MESSAGE("slice data ptr is equal to src data ptr");
         }
 
         BGSlice_free(src);
@@ -402,8 +372,103 @@ test_BGSlice_range_early_stop(void)
 // }
 
 ///////////////////////
-// Integration tests
+// append
 //
+void
+test_BGSlice_append(void)
+{
+    BGSlice *slice = BGSlice_new(int, 0, 5, NULL);
+    TEST_ASSERT_NOT_NULL(slice);
+    ASSERT_SLICE_LEN(slice, 0);
+    ASSERT_SLICE_CAP(slice, 5);
+
+    BGSlice_append(slice, &(int) { 1 });
+    ASSERT_SLICE_LEN(slice, 1);
+    BGSlice_append(slice, &(int) { 2 });
+    BGSlice_append(slice, &(int) { 3 });
+    BGSlice_append(slice, &(int) { 4 });
+    BGSlice_append(slice, &(int) { 5 });
+    ASSERT_SLICE_LEN(slice, 5);
+    BGSlice_append(slice, &(int) { 6 });
+    ASSERT_SLICE_LEN(slice, 6);
+    ASSERT_SLICE_CAP(slice, 10);
+
+    int sum = 0;
+    BGSlice_range(slice, &sum, sum_callback);
+    TEST_ASSERT_EQUAL(21, sum);
+
+    BGSlice_free(slice);
+}
+
+///////////////////////
+// Sorting
+//
+
+extern enum BGStatus
+BGSlice_sort_insertion(BGSlice *s, void *ctx, BGSlice_sort_key_fn key_fn,
+                       BGSlice_sort_comparator comparator);
+
+bool
+print_slice_item(void *item, size_t idx, void *ctx)
+{
+    int *value = (int *) item;
+    printf("%d ", *value);
+    return true;
+}
+
+struct sort_test_ctx {
+    int *prev;
+    bool asc;
+};
+
+bool
+validate_sorted(void *item, size_t idx, void *ctx)
+{
+    int *value = (int *) item;
+
+    struct sort_test_ctx *cctx = (struct sort_test_ctx *) ctx;
+    if (idx == 0) {
+        cctx->prev = value;
+        return true;
+    }
+
+    if (cctx->asc) {
+        TEST_ASSERT_GREATER_OR_EQUAL_MESSAGE(
+            *cctx->prev, *value,
+            "current value is not greater than or equal to previous value");
+    } else {
+        TEST_ASSERT_LESS_OR_EQUAL_MESSAGE(
+            *cctx->prev, *value,
+            "current value is not less or equal to previous value");
+    }
+    cctx->prev = value;
+    return true;
+}
+
+void
+test_BGSlice_insertion_sort(void)
+{
+    int data[] = {
+        7, 4, 1, 3, 8, 2, 2, 5, 1, 1441, 6, 8, 3, 7, 11, 331, 41,
+    };
+
+    BGSlice *slice_sort_asc = BGSlice_new_copy_from_buf(
+        data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO, NULL);
+    TEST_ASSERT_NOT_NULL(slice_sort_asc);
+
+    BGSlice_sort_insertion(slice_sort_asc, NULL, NULL, NULL);
+    struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
+    BGSlice_range(slice_sort_asc, &ctx_asc, validate_sorted);
+
+    BGSlice *slice_sort_desc = BGSlice_new_copy_from_buf(
+        data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO, NULL);
+    TEST_ASSERT_NOT_NULL(slice_sort_desc);
+
+    BGSlice_sort_insertion(slice_sort_desc, NULL, NULL,
+                           BGSlice_default_comparator_desc);
+    struct sort_test_ctx ctx_desc = { .prev = NULL, .asc = false };
+    BGSlice_range(slice_sort_desc, &ctx_desc, validate_sorted);
+}
 
 typedef struct {
     void (*test_func)(void);
@@ -423,6 +488,7 @@ static const test_case_t all_tests[] = {
     { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
     { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
     { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
+    { test_BGSlice_insertion_sort, "test_BGSlice_insertion_sort" },
     // { test_BGSlice_with_null_option, "test_BGSlice_with_null_option" },
     // { test_BGSlice_char_operations, "test_BGSlice_char_operations" }
 };
