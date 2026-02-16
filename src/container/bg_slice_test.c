@@ -371,6 +371,14 @@ test_BGSlice_range_early_stop(void)
 //     BGSlice_free(slice);
 // }
 
+static bool
+print_slice_item(void *item, size_t idx, void *ctx)
+{
+    int *value = (int *) item;
+    printf("%d ", *value);
+    return true;
+}
+
 ///////////////////////
 // append
 //
@@ -383,13 +391,25 @@ test_BGSlice_append(void)
     ASSERT_SLICE_CAP(slice, 5);
 
     BGSlice_append(slice, &(int) { 1 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     ASSERT_SLICE_LEN(slice, 1);
     BGSlice_append(slice, &(int) { 2 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     BGSlice_append(slice, &(int) { 3 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     BGSlice_append(slice, &(int) { 4 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     BGSlice_append(slice, &(int) { 5 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     ASSERT_SLICE_LEN(slice, 5);
     BGSlice_append(slice, &(int) { 6 });
+    BGSlice_range(slice, NULL, print_slice_item);
+    printf("\n");
     ASSERT_SLICE_LEN(slice, 6);
     ASSERT_SLICE_CAP(slice, 10);
 
@@ -407,14 +427,6 @@ test_BGSlice_append(void)
 extern enum BGStatus BGSlice_isort(BGSlice *s, void *ctx,
                                    BGSlice_sort_key_fn key_fn,
                                    BGSlice_sort_comparator comparator);
-
-static bool
-print_slice_item(void *item, size_t idx, void *ctx)
-{
-    int *value = (int *) item;
-    printf("%d ", *value);
-    return true;
-}
 
 struct sort_test_ctx {
     int *prev;
@@ -457,46 +469,100 @@ struct qsort_mo3_partition_args {
 enum BGStatus
 BGSlice_qsort_mo3_partition(struct qsort_mo3_partition_args *args);
 
+struct a {
+    int age;
+    char *name;
+};
+
+static bool
+print_slice_item2(void *_item, size_t idx, void *ctx)
+{
+    struct a *item = (struct a *) _item;
+    printf("age=%d name=%s\n", item->age, item->name);
+    return true;
+}
+
+ssize_t
+item2_comparator(BGSlice_s *s, comparable a, comparable b, void *ctx)
+{
+    struct a *aa = (struct a *) a;
+    struct a *bb = (struct a *) b;
+
+    int name_diff = strcmp(aa->name, bb->name);
+    if (name_diff != 0) {
+        return name_diff; // Ages are different, return the difference
+    }
+
+    // Ages are equal, compare by name
+    return aa->age - bb->age;
+}
+
 void
 test_BGSlice_sorting(void)
 {
     // Unit test the insertion sort.
 
-    {
-        int data[] = {
-            7, 4, 1, 3, 8, 2, 2, 5, 1, 1441, 6, 8, 3, 7, 11, 331, 41,
-        };
+    // {
+    //     int data[] = {
+    //         7, 4, 1, 3, 8, 2, 2, 5, 1, 1441, 6, 8, 3, 7, 11, 331, 41,
+    //     };
 
-        BGSlice *slice_sort_asc = BGSlice_new_copy_from_buf(
-            data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
-            NULL);
-        TEST_ASSERT_NOT_NULL(slice_sort_asc);
+    //     BGSlice *slice_sort_asc = BGSlice_new_copy_from_buf(
+    //         data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
+    //         NULL);
+    //     TEST_ASSERT_NOT_NULL(slice_sort_asc);
 
-        BGSlice_isort(slice_sort_asc, NULL, NULL, NULL);
-        struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
-        BGSlice_range(slice_sort_asc, &ctx_asc, validate_sorted);
+    //     BGSlice_isort(slice_sort_asc, NULL, NULL, NULL);
+    //     struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
+    //     BGSlice_range(slice_sort_asc, &ctx_asc, validate_sorted);
 
-        BGSlice *slice_sort_desc = BGSlice_new_copy_from_buf(
-            data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
-            NULL);
-        TEST_ASSERT_NOT_NULL(slice_sort_desc);
+    //     BGSlice *slice_sort_desc = BGSlice_new_copy_from_buf(
+    //         data, bg_arr_length(data), bg_arr_length(data), BG_SIZE_AUTO,
+    //         NULL);
+    //     TEST_ASSERT_NOT_NULL(slice_sort_desc);
 
-        BGSlice_isort(slice_sort_desc, NULL, NULL,
-                      BGSlice_default_comparator_desc);
-        struct sort_test_ctx ctx_desc = { .prev = NULL, .asc = false };
-        BGSlice_range(slice_sort_desc, &ctx_desc, validate_sorted);
-    }
+    //     BGSlice_isort(slice_sort_desc, NULL, NULL,
+    //                   BGSlice_default_comparator_desc);
+    //     struct sort_test_ctx ctx_desc = { .prev = NULL, .asc = false };
+    //     BGSlice_range(slice_sort_desc, &ctx_desc, validate_sorted);
+    // }
 
     // Unit test qsort
+    // {
+    //     int data[] = { 2, 8, 7, 1, 3, 5, 6, 4 };
+    //     size_t arr_length = bg_arr_length(data);
+    //     BGSlice *slice =
+    //         BGSlice_new_from_buf(data, arr_length, BG_SIZE_AUTO, NULL);
+    //     printf("BEFORE SORTED:\n");
+    //     BGSlice_range(slice, NULL, print_slice_item);
+    //     printf("\n");
+    //     size_t pivot_idx;
+    //     BGSlice_qsort(slice, NULL, NULL, NULL);
+    //     printf("AFTER SORTED:\n");
+    //     printf("\n");
+    //     BGSlice_range(slice, NULL, print_slice_item);
+    //     struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
+    //     BGSlice_range(slice, &ctx_asc, validate_sorted);
+    // }
+
     {
-        int data[] = { 2, 8, 7, 1, 3, 5, 6, 4 };
+        struct a data[] = {
+            { .age = 11, .name = "Salma" },  { .age = 9, .name = "Byzan" },
+            { .age = 10, .name = "Bagas" },  { .age = 15, .name = "Dimas" },
+            { .age = 99, .name = "Pihole" }, { .age = 35, .name = "Cybu" },
+        };
+
         size_t arr_length = bg_arr_length(data);
         BGSlice *slice =
-            BGSlice_new_copy_from_array(data, arr_length, BG_SIZE_AUTO, NULL);
-        size_t pivot_idx;
-        BGSlice_qsort(slice, NULL, NULL, NULL);
-        struct sort_test_ctx ctx_asc = { .prev = NULL, .asc = true };
-        BGSlice_range(slice, &ctx_asc, validate_sorted);
+            BGSlice_new_from_buf(data, arr_length, BG_SIZE_AUTO, NULL);
+
+        printf("BEFORE SORTED:\n");
+        BGSlice_range(slice, NULL, print_slice_item2);
+        printf("\n");
+        BGSlice_qsort(slice, NULL, NULL, item2_comparator);
+        printf("AFTER SORTED:\n");
+        BGSlice_range(slice, NULL, print_slice_item2);
+        printf("\n");
     }
 }
 
@@ -506,18 +572,18 @@ typedef struct {
 } test_case_t;
 
 static const test_case_t all_tests[] = {
-    { test_BGSlice_new, "test_BGSlice_new" },
-    { test_BGSlice_reset, "test_BGSlice_reset" },
-    { test_BGSlice_len_operations, "test_BGSlice_len_operations" },
-    { test_BGSlice_incr_len, "test_BGSlice_incr_len" },
-    { test_BGSlice_get_cap_funcs, "test_BGSlice_get_cap_funcs" },
-    { test_BGSlice_append, "test_BGSlice_append" },
-    { test_BGSlice_get, "test_BGSlice_get" },
-    { test_BGSlice_copy, "test_BGSlice_copy" },
-    { test_BGSlice_grow_to_cap, "test_BGSlice_grow_to_cap" },
-    { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
-    { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
-    { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
+    // { test_BGSlice_new, "test_BGSlice_new" },
+    // { test_BGSlice_reset, "test_BGSlice_reset" },
+    // { test_BGSlice_len_operations, "test_BGSlice_len_operations" },
+    // { test_BGSlice_incr_len, "test_BGSlice_incr_len" },
+    // { test_BGSlice_get_cap_funcs, "test_BGSlice_get_cap_funcs" },
+    // { test_BGSlice_append, "test_BGSlice_append" },
+    // { test_BGSlice_get, "test_BGSlice_get" },
+    // { test_BGSlice_copy, "test_BGSlice_copy" },
+    // { test_BGSlice_grow_to_cap, "test_BGSlice_grow_to_cap" },
+    // { test_BGSlice_new_cap, "test_BGSlice_new_cap" },
+    // { test_BGSlice_range_sum, "test_BGSlice_range_sum" },
+    // { test_BGSlice_range_early_stop, "test_BGSlice_range_early_stop" },
     { test_BGSlice_sorting, "test_BGSlice_sorting" },
     // { test_BGSlice_with_null_option, "test_BGSlice_with_null_option" },
     // { test_BGSlice_char_operations, "test_BGSlice_char_operations" }

@@ -12,8 +12,7 @@
 
 #define min(a, b) (a < b ? a : b)
 #define max(a, b) (a > b ? a : b)
-#define BGSlice_get_size_in_bytes(sl, size) \
-    (sl == NULL ? -1 : size * sl->elem_size)
+#define BGSlice_get_size_in_bytes(sl, size) (size * sl->elem_size)
 #define BGSlice_get_cap_in_bytes(sl) BGSlice_get_size_in_bytes(sl, sl->cap)
 #define BGSlice_get_len_in_bytes(sl) BGSlice_get_size_in_bytes(sl, sl->len)
 
@@ -515,13 +514,31 @@ BGSlice_copy(BGSlice_s *dst, BGSlice_s *src)
     return len_to_copy;
 }
 
+void *BGSlice_get(BGSlice_s *s, size_t index);
+void BG_INLINE *__BGSlice_get(BGSlice_s *s, size_t index);
+void *BGSlice_set(BGSlice_s *s, size_t index, void *item);
+void BG_INLINE *__BGSlice_set(BGSlice_s *s, size_t index, void *item);
+
 void *
 BGSlice_get(BGSlice_s *s, size_t index)
 {
     assert_slice(s != NULL, "slice cannot be NULL");
     assert_slice_len_bound_check(s, index);
 
+    return __BGSlice_get(s, index);
+}
+
+void BG_INLINE *
+__BGSlice_get(BGSlice_s *s, size_t index)
+{
     return &(((char *) s->buf)[BGSlice_get_size_in_bytes(s, index)]);
+}
+
+void BG_INLINE *
+__BGSlice_set(BGSlice_s *s, size_t index, void *item)
+{
+    memcpy(s->buf + BGSlice_get_size_in_bytes(s, index), item, s->elem_size);
+    return item;
 }
 
 void *
@@ -530,8 +547,7 @@ BGSlice_set(BGSlice_s *s, size_t index, void *item)
     assert_slice(s != NULL, "slice cannot be NULL");
     assert_slice_len_bound_check(s, index);
 
-    memcpy(s->buf + BGSlice_get_size_in_bytes(s, index), item, s->elem_size);
-    return item;
+    return __BGSlice_set(s, index, item);
 }
 
 void *
@@ -540,7 +556,7 @@ BGSlice_get_last(BGSlice_s *s)
     assert_slice(s != NULL, "slice cannot be NULL");
     assert_slice_len_bound_check(s, s->len - 1);
 
-    return &(((char *) s->buf)[BGSlice_get_size_in_bytes(s, s->len - 1)]);
+    return __BGSlice_get(s, s->len - 1);
 }
 
 void
@@ -550,11 +566,97 @@ BGSlice_range(BGSlice_s *s, void *ctx, BGSlice_range_callback callback)
     assert_slice(callback != NULL, "callback cannot be NULL");
 
     for (size_t i = 0; i < s->len; i++) {
-        char *ptr = ((char *) s->buf) + BGSlice_get_size_in_bytes(s, i);
+        char *ptr = __BGSlice_get(s, i);
         if (!callback(ptr, i, ctx))
             break;
     }
 }
+
+#define BG_SLICE_ITERATOR_FLAG_NO_BOUND_CHECK (1 << 0)
+
+////////////////////
+// Iterator
+//
+// struct BGSliceIterator {
+//     BGSlice *slice;
+//     size_t idx;
+//     void *(*next)(struct BGSliceIterator *iter);
+// };
+
+// struct BGSliceIterator
+// BGSlice_iter(BGSlice *slice, size_t hint_low, size_t hint_max)
+// {
+//     struct BGSliceIterator iter = { .slice = slice, .idx = 0 };
+
+//     u32 flags = 0;
+//     if (hint_low >= 0 && hint_max < slice->len)
+//         iter.next = BGSlice_iter_next_no_bound_check;
+//     else
+//         iter.next = BGSlice_iter_next_bound_checked;
+
+//     return iter;
+// }
+
+// void *
+// BGSlice_iter_next_bound_checked(struct BGSliceIterator *iter)
+// {
+//     void *item = BGSlice_get(iter->slice, iter->idx);
+//     iter->idx++;
+//     return item;
+// }
+
+// void *
+// BGSlice_iter_next_no_bound_check(struct BGSliceIterator *iter)
+// {
+//     void *item = __BGSlice_get(iter->slice, iter->idx);
+//     iter->idx++;
+//     return item;
+// }
+
+#ifdef BG_SLICE_EXAMPLE
+int
+main(void)
+{
+    int data[] = { 5, 1, 4, 1, 6, 7, 9, 2, 3, 5 };
+    BGSlice *slice =
+        BGSlice_new_copy_all_from_array(data, BG_AUTO, BG_AUTO, NULL);
+    struct BGSliceIterator iter = BGSlice_iter(slice, 0, `);
+}
+#endif
+
+////////////////////
+// Searching
+//
+
+/**
+ * Search item matching `term` in the slice using binary search, return the
+ * index. Needs to be sorted first.
+ */
+// ssize_t
+// BGSlice_binary_search_indexof(BGSlice *s, void *term)
+// {
+//     if (s->len <= 10)
+//         return BGSlice_linear_search_indexof(s, term);
+
+//     size_t low = 0;
+//     size_t high = s->len;
+//     size_t mid = (high - low) / 2;
+//     while (true) {
+//         void *item = __BGSlice_get(s, mid);
+//         int cmp_ret = memcmp(item, term, s->elem_size);
+//         if (cmp_ret == 0)
+//             return mid;
+//         else if (cmp_ret < 0)
+//             high = mid - 1;
+//         else if (cmp_ret > 0)
+//             low = mid + 1;
+//     }
+// }
+
+// ssize_t
+// BGSlice_linear_search_indexof(BGSlice *s, void *term)
+// {
+// }
 
 ////////////////////
 // Sorting
@@ -613,9 +715,11 @@ BGSlice_isort(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
             j--;
         }
     }
+
+    return BG_OK;
 }
 
-static bool
+bool
 print_slice_item(void *item, size_t idx, void *ctx)
 {
     int *value = (int *) item;
@@ -623,7 +727,7 @@ print_slice_item(void *item, size_t idx, void *ctx)
     return true;
 }
 
-static struct pivot_buf_t {
+struct pivot_buf_t {
     void *value;
     size_t index;
 };
@@ -762,8 +866,10 @@ BGSlice_qsort(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
 {
     assert_slice(s != NULL, "slice cannot be NULL");
 
+    enum BGStatus ret = BG_OK;
+
     if (s->len <= 1)
-        return BG_OK;
+        goto done;
 
     key_fn = key_fn == NULL ? BGSlice_key_fn_default : key_fn;
     comparator =
@@ -771,10 +877,8 @@ BGSlice_qsort(BGSlice_s *s, void *ctx, BGSlice_sort_key_fn key_fn,
 
     if (s->len <= 15) {
         BGSlice_isort(s, ctx, key_fn, comparator);
-        return s->len;
+        goto done;
     }
-
-    enum BGStatus ret;
 
     void *swap_tmp = s->allocator->malloc(s->elem_size);
     if (swap_tmp == NULL) {
@@ -807,5 +911,6 @@ free_pivot_indices:
 free_swap_tmp:
     s->allocator->free(swap_tmp);
 
+done:
     return ret;
 }

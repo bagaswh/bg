@@ -37,7 +37,7 @@ BGSlice *__BGSlice_new_copy_from_buf(void *ptr, size_t size, size_t len,
 #define BGSlice_new_copy_from_buf(buf, n, len, cap, option)                \
     __BGSlice_new_copy_from_buf((void *) buf, n, len, cap, sizeof(buf[0]), \
                                 option)
-#define BGSlice_new_copy_from_array(arr, len, cap, option)                  \
+#define BGSlice_new_copy_all_from_array(arr, len, cap, option)              \
     __BGSlice_new_copy_from_buf((void *) arr, bg_arr_length(arr), len, cap, \
                                 sizeof(arr[0]), option)
 
@@ -75,6 +75,8 @@ void *BGSlice_set(BGSlice *s, size_t index, void *item);
 
 typedef bool (*BGSlice_range_callback)(void *item, size_t idx, void *ctx);
 void BGSlice_range(BGSlice *s, void *ctx, BGSlice_range_callback callback);
+
+#define BG_AUTO BG_SIZE_AUTO
 
 typedef i8 *comparable;
 typedef ssize_t (*BGSlice_sort_comparator)(BGSlice *s, comparable a,
